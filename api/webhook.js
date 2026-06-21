@@ -4,8 +4,8 @@ export default async function handler(req, res) {
   const events = req.body.events;
   if (!events || events.length === 0) return res.status(200).send('OK');
 
-  const event = events[0];
-  if (event.type !== 'message' || event.message.type !== 'text') {
+  const event = events[0]; // 強制指向第一筆訊息
+  if (!event || event.type !== 'message' || event.message.type !== 'text') {
     return res.status(200).send('OK');
   }
 
@@ -14,24 +14,34 @@ export default async function handler(req, res) {
 
   try {
     // 1. 問 OpenAI 拿到最聰明的答案
-    const aiResponse = await fetch('https://openai.com', {
+    const openAiResponse = await fetch('https://openai.com', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+        'Authorization': 'Bearer ' + String(process.env.OPENAI_API_KEY).trim() // 強制清除可能存在的隱形空格
       },
       body: JSON.stringify({
         model: 'gpt-4o-mini',
-        messages: [{ role: 'user', content: userMessage }]
+        messages: [{ role: 'user', content: String(userMessage) }]
       })
-    }).then(res => res.json()).then(data => data.choices[0].message.content);
+    });
+
+    const aiData = await openAiResponse.json();
+    
+    // 如果 OpenAI 回傳錯誤，直接顯示在日誌上方便排查
+    if (aiData.error) {
+      console.error("OpenAI 後端拒絕連線，詳細原因:", JSON.stringify(aiData.error));
+      return res.status(200).send('OK');
+    }
+
+    const aiResponse = aiData.choices[0].message.content;
 
     // 2. 用最安全的格式回傳給 LINE 手機端
     await fetch('https://line.me', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`
+        'Authorization': 'Bearer ' + String(process.env.LINE_CHANNEL_ACCESS_TOKEN).trim()
       },
       body: JSON.stringify({
         replyToken: replyToken,
@@ -40,7 +50,7 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error("AI 或 LINE 連線失敗，原因:", error);
+    console.error("執行過程中發生錯誤，原因:", error);
   }
 
   return res.status(200).send('OK');
