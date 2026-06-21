@@ -1,4 +1,3 @@
-// 這裡用最簡單的方式，不需要安裝複雜套件，適合 Vercel 直接執行
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(200).send('OK');
 
